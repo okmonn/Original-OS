@@ -1,41 +1,38 @@
-#デフォルト処理
-default:
-	make img
-
-#バイナリファイル生成
-%.bin : %.asm Makefile
+#アセンブリファイルコンパイル方法
+%.bin : %.asm makefile
 	nasm $*.asm -o $*.bin -l $*.lst
 
-#オブジェクトファイル生成
-%.o : %.c Makefile
-	gcc -c -m32 -fno-pic -nostdlib -o $*.o $*.c
-%.o : %.asm Makefile
+#Cソースファイルコンパイル方法
+%.o : %.c makefile
+	gcc -c -m32 -fno-pic -o $*.o $*.c
+
+#C++ソースファイルコンパイル方法
+%.o : %.cpp makefile
+	g++ -Wall -std=c++17 -c -m32 -fno-pic -fno-stack-protector -o $*.o $*.cpp
+
+#アセンブリファイルをバイナリ出力する
+%.o : %.asm makefile
 	nasm -f elf32 -o $*.o $*.asm
 
-#半角フォントデータ作成
-hankaku.c : hankaku.txt Font.c Makefile
-	gcc Font.c -o Font
-	./Font
+#hrbファイル作成
+bootpack.hrb : har.ld bootpack.o Func.o GateDescriptor.o SegmentDescriptor.o nasmfunc.o makefile
+	ld -m elf_i386 -e main -o bootpack.hrb -T har.ld bootpack.o Func.o GateDescriptor.o SegmentDescriptor.o nasmfunc.o
 
-Main.hrb : hrb.ld Main.o Func.o hankaku.o Init.o Draw.o Math.o Makefile
-	ld -m elf_i386 -e Main -o Main.hrb -T hrb.ld Main.o Func.o hankaku.o Init.o Draw.o Math.o
+#システムファイル作成
+nasmhead.sys : nasmhead.bin bootpack.hrb makefile
+	cat nasmhead.bin bootpack.hrb > nasmhead.sys
 
-okmonn.sys : okmonn.bin Main.hrb Makefile
-	cat okmonn.bin Main.hrb > okmonn.sys
+#イメージファイル作成
+helloos.img : ipl10.bin nasmhead.sys makefile
+	mformat -f 1440 -C -B ipl10.bin -i helloos.img ::
+	mcopy nasmhead.sys -i helloos.img ::
 
-okmonn.img : okmonn.sys HelloOS.bin Makefile
-	mformat -f 1440 -C -B HelloOS.bin -i okmonn.img ::
-	mcopy okmonn.sys -i okmonn.img ::
-
-asm:
-	make -r HelloOS.bin
-
-img:
-	make -r okmonn.img
-
-run:
-	make img
-	qemu-system-i386 -drive file=okmonn.img,format=raw,if=floppy
-
+#ファイル削除
 clear:
-	rm *.lst *.bin *.sys *.img *.hrb *.o
+	rm *.bin *.lst *.o *.hrb *.sys *.img
+
+#仮想OS起動
+run:
+	make -r helloos.img
+	qemu-system-i386 -drive file=helloos.img,format=raw,if=floppy
+	make clear
